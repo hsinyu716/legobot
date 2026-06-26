@@ -31,7 +31,19 @@
   .qhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
   .qno{background:var(--brand);color:#fff;border-radius:8px;font-weight:800;padding:3px 10px;font-size:14px;white-space:nowrap}
   .qsrc{color:var(--muted);font-size:13px}
-  .qimg{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;display:block}
+  .qimg{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;display:block;cursor:zoom-in}
+  /* lightbox */
+  .lb{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.88);display:none;
+      align-items:center;justify-content:center;padding:24px;cursor:zoom-out;overflow:auto}
+  .lb.open{display:flex}
+  .lb-img{max-width:100%;max-height:100%;border-radius:8px;background:#fff;
+          box-shadow:0 10px 40px rgba(0,0,0,.5);transition:transform .15s ease;transform-origin:center}
+  .lb.zoomed{cursor:zoom-in;align-items:flex-start}
+  .lb.zoomed .lb-img{max-width:none;max-height:none;width:200%;cursor:grab}
+  .lb-close{position:fixed;top:14px;right:18px;z-index:101;background:rgba(255,255,255,.92);
+            color:#1f2937;border-radius:50%;width:42px;height:42px;font-size:22px;font-weight:800;
+            line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow)}
+  .lb-tip{position:fixed;bottom:16px;left:0;right:0;text-align:center;color:#e5e7eb;font-size:13px;pointer-events:none}
   .hint{font-size:13px;color:var(--muted);margin:8px 2px 4px}
   .opts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
   @media(max-width:560px){.opts{grid-template-columns:1fr}}
@@ -75,6 +87,12 @@
 </div>
 
 <div class="wrap" id="quiz"></div>
+
+<div class="lb" id="lightbox">
+  <button class="lb-close" id="lbClose" aria-label="關閉">×</button>
+  <img class="lb-img" id="lbImg" src="" alt="放大檢視">
+  <div class="lb-tip">點圖片可再放大／縮小，點背景或按 Esc 關閉</div>
+</div>
 
 <div class="result" id="resultBar" style="display:none">
   <div class="inner">
@@ -200,6 +218,27 @@ document.getElementById('againBtn').addEventListener('click', pickQuiz);
 document.getElementById('reviewBtn').addEventListener('click', ()=>{
   document.getElementById('quiz').scrollIntoView({behavior:'smooth'});
 });
+
+// ---- lightbox ----
+const lb=document.getElementById('lightbox'), lbImg=document.getElementById('lbImg');
+function openLB(src,alt){
+  lbImg.src=src; lbImg.alt=alt||'放大檢視';
+  lb.classList.add('open'); lb.classList.remove('zoomed');
+  document.body.style.overflow='hidden';
+}
+function closeLB(){
+  lb.classList.remove('open','zoomed');
+  document.body.style.overflow='';
+  lbImg.src='';
+}
+document.getElementById('quiz').addEventListener('click',e=>{
+  const img=e.target.closest('img.qimg');
+  if(img){ openLB(img.src, img.alt); }
+});
+lbImg.addEventListener('click',e=>{ e.stopPropagation(); lb.classList.toggle('zoomed'); });
+lb.addEventListener('click', closeLB);
+document.getElementById('lbClose').addEventListener('click', e=>{ e.stopPropagation(); closeLB(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && lb.classList.contains('open')) closeLB(); });
 
 fetch('questions.json')
   .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
