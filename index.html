@@ -276,18 +276,20 @@ function grade(){
     const st = stats[q.id] || (stats[q.id]={c:0,w:0});
     if(chosen===q.answer){
       correct++; st.c++;
+      seen.add(q.id);            // 答對 → 留在已出現名單，本輪內不再重複
       v.className='verdict show r-ok';
       v.innerHTML='✓ 答對了！正確答案：選項 '+q.answer
                   +`<div class="vstat">此題累計：答對 ${st.c} 次／答錯 ${st.w} 次</div>`;
     }else{
       if(chosen) st.w++;
+      seen.delete(q.id);         // 答錯/未作答 → 放回題庫，之後仍會再出現複習
       v.className='verdict show r-bad';
       v.innerHTML = (chosen? '✗ 答錯了。':'（未作答）') + ' 正確答案：選項 '+q.answer
                       + (q.answerText? '（'+q.answerText+'）':'')
-                      + `<div class="vstat">此題累計：答對 ${st.c} 次／答錯 ${st.w} 次</div>`;
+                      + `<div class="vstat">此題累計：答對 ${st.c} 次／答錯 ${st.w} 次　（已放回題庫複習）</div>`;
     }
   });
-  saveStats();
+  saveStats(); saveSeen();
   renderStats();
   const pct=Math.round(correct/TOTAL_PICK*100);
   document.getElementById('scoreText').innerHTML =

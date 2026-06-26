@@ -1869,8 +1869,9 @@
    "2圈",
    "5圈"
   ],
-  "answer": 1,
-  "answerText": "20 圈"
+  "answer": 3,
+  "answerText": "2 圈",
+  "corrected": true
  },
  {
   "id": 145,
@@ -2326,8 +2327,9 @@
    "紅光比較漂亮",
    "黑白色不是顏色感應器能夠偵測的"
   ],
-  "answer": 4,
-  "answerText": "無法以顏色方式辨識黑白色"
+  "answer": 2,
+  "answerText": "軌跡線的黑白亮度差異可能使顏色辨識錯誤",
+  "corrected": true
  },
  {
   "id": 180,
@@ -3614,7 +3616,8 @@
    "障礙物距離機器人20公分時"
   ],
   "answer": 4,
-  "answerText": "障礙物距離機器人 20 公分時"
+  "answerText": "障礙物距離機器人20公分時",
+  "corrected": true
  },
  {
   "id": 279,
