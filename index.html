@@ -68,6 +68,23 @@
   .result .inner{max-width:920px;margin:0 auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
   .score{font-size:20px;font-weight:800}
   .score b{font-size:28px}
+  /* stats */
+  .statbox{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:16px 0 0;box-shadow:var(--shadow)}
+  .statbox h2{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:560px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+  .stat{background:#f7f9ff;border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center}
+  .stat .v{font-size:22px;font-weight:800;color:var(--brand);line-height:1.2}
+  .stat .v.ok{color:var(--ok)} .stat .v.bad{color:var(--bad)}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .statbox .tools{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .statbox .tools .note{font-size:12px;color:var(--muted)}
+  .btn-sm{padding:6px 12px;font-size:13px;border-radius:8px}
+  .btn-danger{background:#fff;color:var(--bad);border:1px solid #f3c2c2}
+  .btn-danger:hover{background:var(--bad-bg)}
+  .badge-wrong{background:var(--bad-bg);color:var(--bad);border:1px solid #f3c2c2;border-radius:999px;
+               font-size:12px;font-weight:700;padding:2px 9px;white-space:nowrap}
+  .vstat{font-size:12px;color:var(--muted);margin-top:4px}
   .foot{text-align:center;color:var(--muted);font-size:13px;padding:24px 16px 60px}
   .unanswered{color:var(--bad);font-weight:700}
   a{color:var(--brand)}
@@ -85,6 +102,8 @@
   <button class="btn-ghost" id="reshuffle">🔀 重新抽題</button>
   <button class="btn-primary" id="submit">交卷</button>
 </div>
+
+<div class="wrap"><div class="statbox" id="statbox"></div></div>
 
 <div class="wrap" id="quiz"></div>
 
@@ -120,10 +139,36 @@ function shuffle(a){
   return a;
 }
 
+// ---- persistent state ----
+const STATS_KEY='ttra_stats_v1';   // 累計（跨重新整理）：{id:{c,w}}
+const SEEN_KEY='ttra_seen_v1';     // 本 session 已出現的題號（不重複出題）
+let stats={}, seen=new Set();
+
+function loadState(){
+  try{ stats=JSON.parse(localStorage.getItem(STATS_KEY))||{}; }catch(e){ stats={}; }
+  try{ seen=new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY))||[]); }catch(e){ seen=new Set(); }
+}
+function saveStats(){ try{ localStorage.setItem(STATS_KEY, JSON.stringify(stats)); }catch(e){} }
+function saveSeen(){ try{ sessionStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); }catch(e){} }
+
 function pickQuiz(){
-  quiz = shuffle([...bank]).slice(0, TOTAL_PICK);
+  // 優先抽本 session 尚未出現過的題目；不足時開啟新一輪
+  let unseen = shuffle(bank.filter(q=>!seen.has(q.id)).map(q=>q.id));
+  let chosen;
+  if(unseen.length >= TOTAL_PICK){
+    chosen = unseen.slice(0, TOTAL_PICK);
+  }else{
+    const rest = shuffle(bank.filter(q=>seen.has(q.id)).map(q=>q.id));
+    chosen = unseen.concat(rest).slice(0, TOTAL_PICK);
+    seen = new Set();            // 全部題目都出過一輪 → 重新開始計算「已出現」
+  }
+  chosen.forEach(id=>seen.add(id));
+  saveSeen();
+  const byid=Object.fromEntries(bank.map(q=>[q.id,q]));
+  quiz = chosen.map(id=>byid[id]);
   answers = {}; graded = false;
   render();
+  renderStats();
   document.getElementById('resultBar').style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -143,10 +188,14 @@ function render(){
         <span class="t">${txt ? esc(txt) : '選項 '+i}</span>
       </label>`;
     }
+    const st=stats[q.id];
+    const wrongBadge = (st && st.w>0)
+      ? `<span class="badge-wrong" title="此題過去曾答錯">⚠ 曾答錯 ${st.w} 次</span>` : '';
     card.innerHTML = `
       <div class="qhead">
         <span class="qno">第 ${idx+1} 題</span>
         <span class="qsrc">（題庫第 ${q.id} 題）</span>
+        ${wrongBadge}
       </div>
       <img class="qimg" src="${q.img}" alt="第 ${q.id} 題" loading="lazy">
       <div class="hint">請選擇正確答案（選項 1～4 對應題目圖中由左至右四欄）：</div>
@@ -175,6 +224,36 @@ function updateProgress(){
     `已作答 ${Object.keys(answers).length} / ${TOTAL_PICK}`;
 }
 
+function renderStats(){
+  const ids=Object.keys(stats);
+  let attempts=0, c=0, w=0, wrongQ=0, answeredQ=ids.length;
+  ids.forEach(id=>{ const s=stats[id]; attempts+=s.c+s.w; c+=s.c; w+=s.w; if(s.w>0) wrongQ++; });
+  const acc = attempts? Math.round(c/attempts*100) : 0;
+  const seenN = seen.size;
+  document.getElementById('statbox').innerHTML = `
+    <h2>📊 學習統計</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="v">${seenN}/300</div><div class="l">本次已出現題數</div></div>
+      <div class="stat"><div class="v">${attempts}</div><div class="l">累計作答題次</div></div>
+      <div class="stat"><div class="v ok">${c}</div><div class="l">累計答對</div></div>
+      <div class="stat"><div class="v bad">${w}</div><div class="l">累計答錯</div></div>
+      <div class="stat"><div class="v">${acc}%</div><div class="l">正確率</div></div>
+      <div class="stat"><div class="v">${answeredQ}/300</div><div class="l">作答過的題目</div></div>
+      <div class="stat"><div class="v bad">${wrongQ}</div><div class="l">曾答錯題數</div></div>
+      <div class="stat"><div class="v">${Math.max(0,300-seenN)}</div><div class="l">本次尚未出現</div></div>
+    </div>
+    <div class="tools">
+      <button class="btn-danger btn-sm" id="resetStats">🗑 清除累計統計</button>
+      <span class="note">統計與「曾答錯」標記會記錄在此瀏覽器；「本次已出現」於關閉分頁後重置。</span>
+    </div>`;
+  const rb=document.getElementById('resetStats');
+  if(rb) rb.addEventListener('click', ()=>{
+    if(confirm('確定要清除所有累計統計與「曾答錯」標記嗎？此動作無法復原。')){
+      stats={}; saveStats(); render(); renderStats();
+    }
+  });
+}
+
 function grade(){
   const done = Object.keys(answers).length;
   if(done < TOTAL_PICK){
@@ -193,15 +272,23 @@ function grade(){
       if(i===q.answer) o.classList.add('correct');
       if(chosen===i && i!==q.answer) o.classList.add('wrong');
     });
+    // 更新累計統計（未作答不計入對錯）
+    const st = stats[q.id] || (stats[q.id]={c:0,w:0});
     if(chosen===q.answer){
-      correct++;
-      v.className='verdict show r-ok'; v.textContent='✓ 答對了！正確答案：選項 '+q.answer;
+      correct++; st.c++;
+      v.className='verdict show r-ok';
+      v.innerHTML='✓ 答對了！正確答案：選項 '+q.answer
+                  +`<div class="vstat">此題累計：答對 ${st.c} 次／答錯 ${st.w} 次</div>`;
     }else{
+      if(chosen) st.w++;
       v.className='verdict show r-bad';
-      v.textContent = (chosen? '✗ 答錯了。':'（未作答）') + ' 正確答案：選項 '+q.answer
-                      + (q.answerText? '（'+q.answerText+'）':'');
+      v.innerHTML = (chosen? '✗ 答錯了。':'（未作答）') + ' 正確答案：選項 '+q.answer
+                      + (q.answerText? '（'+q.answerText+'）':'')
+                      + `<div class="vstat">此題累計：答對 ${st.c} 次／答錯 ${st.w} 次</div>`;
     }
   });
+  saveStats();
+  renderStats();
   const pct=Math.round(correct/TOTAL_PICK*100);
   document.getElementById('scoreText').innerHTML =
     `得分：<b>${pct}</b> 分　答對 ${correct} / ${TOTAL_PICK} 題`;
@@ -242,7 +329,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape' && lb.classList.co
 
 fetch('questions.json')
   .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-  .then(d=>{ bank=d; pickQuiz(); })
+  .then(d=>{ bank=d; loadState(); pickQuiz(); })
   .catch(e=>{
     document.getElementById('quiz').innerHTML =
       `<div class="card" style="color:#dc2626">
